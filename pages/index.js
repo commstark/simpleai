@@ -492,8 +492,7 @@ export default function Home() {
         </main>
 
         <footer>
-          Powered by <a href="https://anthropic.com" target="_blank" rel="noopener">Claude AI</a> · Built by <a href="/" target="_blank">SimpleAI</a> · 10 free replies/day
-        </footer>
+Powered by <a href="https://anthropic.com" target="_blank" rel="noopener">Claude AI</a> · Built by SimpleAI        </footer>
       </div>
     </>
   );
