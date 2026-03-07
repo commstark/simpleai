@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Head from "next/head";
 import { track } from "@vercel/analytics";
 
@@ -40,6 +40,45 @@ export default function Home() {
   const [feedbackRating, setFeedbackRating] = useState(null);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackState, setFeedbackState] = useState("idle");
+  const [referralCode, setReferralCode] = useState("");
+  const [referralCount, setReferralCount] = useState(0);
+  const [referralCopied, setReferralCopied] = useState(false);
+  const trackedRef = useRef(false);
+
+  // Init referral code from localStorage, track incoming ?ref=
+  useEffect(() => {
+    let code = localStorage.getItem("simpleai_ref_code");
+    if (!code) {
+      code = Math.random().toString(36).slice(2, 10).toUpperCase();
+      localStorage.setItem("simpleai_ref_code", code);
+    }
+    setReferralCode(code);
+
+    fetch(`/api/referral?code=${code}`)
+      .then(r => r.json())
+      .then(d => setReferralCount(d.count || 0))
+      .catch(() => {});
+
+    // Track if arriving via someone else's referral link
+    const params = new URLSearchParams(window.location.search);
+    const incomingRef = params.get("ref");
+    if (incomingRef && incomingRef !== code && !trackedRef.current) {
+      trackedRef.current = true;
+      fetch("/api/referral", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ referrerCode: incomingRef }),
+      }).catch(() => {});
+    }
+  }, []);
+
+  function handleReferralCopy() {
+    const link = `https://simpleai-nine.vercel.app?ref=${referralCode}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setReferralCopied(true);
+      setTimeout(() => setReferralCopied(false), 2000);
+    });
+  }
 
   async function handleSubmit() {
     if (!message.trim()) return;
@@ -448,6 +487,53 @@ export default function Home() {
           font-weight: 500;
         }
 
+        /* REFERRAL */
+        .referral-section {
+          margin-top: 3rem;
+          padding: 1.5rem;
+          background: var(--surface);
+          border: 1.5px solid var(--amber-border);
+          border-radius: var(--radius);
+          box-shadow: var(--shadow);
+        }
+        .referral-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .referral-eyebrow { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); margin-bottom: 0.25rem; }
+        .referral-title { font-family: 'Lora', serif; font-size: 1.1rem; font-weight: 600; color: var(--ink); margin-bottom: 0.2rem; }
+        .referral-sub { font-size: 0.85rem; color: var(--muted); }
+        .referral-count-box { text-align: center; background: var(--amber-bg); border: 1px solid var(--amber-border); border-radius: 8px; padding: 0.75rem 1.25rem; flex-shrink: 0; }
+        .referral-count-num { font-family: 'Lora', serif; font-size: 2rem; color: var(--amber); display: block; line-height: 1; }
+        .referral-count-label { font-size: 0.72rem; color: var(--amber); font-weight: 500; }
+        .referral-link-row { display: flex; gap: 0.5rem; align-items: center; }
+        .referral-link-display {
+          flex: 1;
+          padding: 0.6rem 0.9rem;
+          background: var(--bg);
+          border: 1.5px solid var(--border);
+          border-radius: 6px;
+          font-size: 0.83rem;
+          color: var(--muted);
+          font-family: monospace;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .referral-copy-btn {
+          padding: 0.6rem 1.1rem;
+          background: var(--amber);
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          font-family: 'Source Sans 3', sans-serif;
+          font-size: 0.85rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.15s;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+        .referral-copy-btn:hover { background: #a85515; }
+        .referral-copy-btn.copied { background: var(--green); }
+
         footer { border-top: 1px solid var(--border); padding: 1.25rem 2rem; text-align: center; font-size: 0.78rem; color: var(--muted); margin-top: 2rem; }
         footer a { color: var(--amber); text-decoration: none; }
 
@@ -577,6 +663,31 @@ export default function Home() {
                 ) : (
                   <div className="feedback-thanks">Thanks for your feedback 🙏</div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Share & Invite */}
+          {referralCode && (
+            <div className="referral-section">
+              <div className="referral-header">
+                <div>
+                  <div className="referral-eyebrow">Share & Invite</div>
+                  <div className="referral-title">Know a small business owner?</div>
+                  <p className="referral-sub">Send them your link — it's free and takes 30 seconds.</p>
+                </div>
+                <div className="referral-count-box">
+                  <span className="referral-count-num">{referralCount}</span>
+                  <span className="referral-count-label">people invited</span>
+                </div>
+              </div>
+              <div className="referral-link-row">
+                <div className="referral-link-display">
+                  simpleai-nine.vercel.app?ref={referralCode}
+                </div>
+                <button className={`referral-copy-btn ${referralCopied ? "copied" : ""}`} onClick={handleReferralCopy}>
+                  {referralCopied ? "✓ Copied!" : "Copy link"}
+                </button>
               </div>
             </div>
           )}
