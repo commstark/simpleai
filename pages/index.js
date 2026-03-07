@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Head from "next/head";
+import { track } from "@vercel/analytics";
 
 const TONES = [
   { id: "friendly", label: "😊 Friendly", desc: "Warm & approachable" },
@@ -17,6 +18,9 @@ export default function Home() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [charCount, setCharCount] = useState(0);
+  const [feedbackRating, setFeedbackRating] = useState(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackState, setFeedbackState] = useState("idle");
 
   async function handleSubmit() {
     if (!message.trim()) return;
@@ -24,6 +28,11 @@ export default function Home() {
     setError("");
     setReply("");
     setCopied(false);
+    setFeedbackRating(null);
+    setFeedbackComment("");
+    setFeedbackState("idle");
+
+    track("query_submitted", { tone, has_business_type: !!businessType });
 
     try {
       const res = await fetch("/api/reply", {
@@ -34,8 +43,10 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Something went wrong");
       setReply(data.reply);
+      track("reply_received", { tone });
     } catch (e) {
       setError(e.message);
+      track("reply_error", { error: e.message });
     } finally {
       setLoading(false);
     }
@@ -50,6 +61,22 @@ export default function Home() {
   function handleMessageChange(e) {
     setMessage(e.target.value);
     setCharCount(e.target.value.length);
+  }
+
+  function handleFeedback(rating) {
+    setFeedbackRating(rating);
+    setFeedbackState("open");
+  }
+
+  async function submitFeedback() {
+    try {
+      await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: feedbackRating, comment: feedbackComment, tone }),
+      });
+    } catch (_) {}
+    setFeedbackState("submitted");
   }
 
   return (
@@ -88,13 +115,8 @@ export default function Home() {
           -webkit-font-smoothing: antialiased;
         }
 
-        .page {
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
-        }
+        .page { min-height: 100vh; display: flex; flex-direction: column; }
 
-        /* HEADER */
         header {
           padding: 1.25rem 2rem;
           border-bottom: 1px solid var(--border);
@@ -104,19 +126,12 @@ export default function Home() {
           background: var(--surface);
         }
 
-        .logo {
-          font-family: 'Lora', serif;
-          font-size: 1.3rem;
-          color: var(--ink);
-          letter-spacing: -0.01em;
-        }
-
+        .logo { font-family: 'Lora', serif; font-size: 1.3rem; color: var(--ink); letter-spacing: -0.01em; }
         .logo span { color: var(--amber); }
 
         .header-tag {
           font-size: 0.75rem;
           font-weight: 500;
-          color: var(--muted);
           letter-spacing: 0.04em;
           background: var(--amber-bg);
           border: 1px solid var(--amber-border);
@@ -125,14 +140,7 @@ export default function Home() {
           border-radius: 100px;
         }
 
-        /* MAIN */
-        main {
-          flex: 1;
-          max-width: 680px;
-          width: 100%;
-          margin: 0 auto;
-          padding: 3rem 1.5rem 4rem;
-        }
+        main { flex: 1; max-width: 680px; width: 100%; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
 
         .headline {
           font-family: 'Lora', serif;
@@ -142,31 +150,12 @@ export default function Home() {
           margin-bottom: 0.75rem;
           color: var(--ink);
         }
-
         .headline em { font-style: italic; color: var(--amber); }
 
-        .subhead {
-          font-size: 1.05rem;
-          color: var(--muted);
-          font-weight: 300;
-          line-height: 1.6;
-          margin-bottom: 2.5rem;
-        }
+        .subhead { font-size: 1.05rem; color: var(--muted); font-weight: 300; line-height: 1.6; margin-bottom: 2.5rem; }
 
-        /* CARD */
-        .card {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: var(--radius);
-          box-shadow: var(--shadow);
-          overflow: hidden;
-        }
-
-        .card-section {
-          padding: 1.5rem;
-          border-bottom: 1px solid var(--border);
-        }
-
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+        .card-section { padding: 1.5rem; border-bottom: 1px solid var(--border); }
         .card-section:last-child { border-bottom: none; }
 
         .section-label {
@@ -181,7 +170,6 @@ export default function Home() {
           gap: 0.4rem;
         }
 
-        /* OPTIONAL BIZ INPUT */
         .biz-input {
           width: 100%;
           padding: 0.65rem 0.9rem;
@@ -194,17 +182,10 @@ export default function Home() {
           outline: none;
           transition: border-color 0.15s;
         }
-
         .biz-input:focus { border-color: var(--amber); background: #fff; }
         .biz-input::placeholder { color: rgba(28,25,23,0.3); }
 
-        /* TONE SELECTOR */
-        .tone-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 0.5rem;
-        }
-
+        .tone-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
         .tone-btn {
           padding: 0.65rem 0.5rem;
           border: 1.5px solid var(--border);
@@ -215,21 +196,13 @@ export default function Home() {
           transition: all 0.15s;
           font-family: 'Source Sans 3', sans-serif;
         }
-
         .tone-btn:hover { border-color: var(--amber); background: var(--amber-bg); }
-
-        .tone-btn.active {
-          border-color: var(--amber);
-          background: var(--amber-bg);
-        }
-
+        .tone-btn.active { border-color: var(--amber); background: var(--amber-bg); }
         .tone-emoji { font-size: 1.1rem; display: block; margin-bottom: 0.2rem; }
         .tone-name { font-size: 0.8rem; font-weight: 500; color: var(--ink); display: block; }
         .tone-desc { font-size: 0.7rem; color: var(--muted); display: block; margin-top: 0.1rem; }
 
-        /* MESSAGE TEXTAREA */
         .message-wrap { position: relative; }
-
         textarea {
           width: 100%;
           min-height: 140px;
@@ -245,19 +218,10 @@ export default function Home() {
           outline: none;
           transition: border-color 0.15s;
         }
-
         textarea:focus { border-color: var(--amber); background: #fff; }
         textarea::placeholder { color: rgba(28,25,23,0.3); }
+        .char-count { position: absolute; bottom: 0.5rem; right: 0.75rem; font-size: 0.72rem; color: var(--muted); }
 
-        .char-count {
-          position: absolute;
-          bottom: 0.5rem;
-          right: 0.75rem;
-          font-size: 0.72rem;
-          color: var(--muted);
-        }
-
-        /* SUBMIT BUTTON */
         .submit-btn {
           width: 100%;
           padding: 1rem;
@@ -275,23 +239,19 @@ export default function Home() {
           justify-content: center;
           gap: 0.5rem;
         }
-
         .submit-btn:hover:not(:disabled) { background: var(--amber); }
         .submit-btn:active:not(:disabled) { transform: scale(0.99); }
         .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .spinner {
-          width: 16px;
-          height: 16px;
+          width: 16px; height: 16px;
           border: 2px solid rgba(255,255,255,0.3);
           border-top-color: #fff;
           border-radius: 50%;
           animation: spin 0.7s linear infinite;
         }
-
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ERROR */
         .error-box {
           margin-top: 1rem;
           padding: 0.9rem 1rem;
@@ -303,11 +263,7 @@ export default function Home() {
           line-height: 1.5;
         }
 
-        /* REPLY OUTPUT */
-        .reply-section {
-          margin-top: 1.5rem;
-          animation: fadeUp 0.35s ease both;
-        }
+        .reply-section { margin-top: 1.5rem; animation: fadeUp 0.35s ease both; }
 
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(12px); }
@@ -325,13 +281,11 @@ export default function Home() {
           align-items: center;
           gap: 0.4rem;
         }
-
         .reply-label::before {
           content: '✓';
           background: var(--green-bg);
           color: var(--green);
-          width: 18px;
-          height: 18px;
+          width: 18px; height: 18px;
           border-radius: 50%;
           display: inline-flex;
           align-items: center;
@@ -365,7 +319,6 @@ export default function Home() {
           cursor: pointer;
           transition: background 0.15s;
         }
-
         .copy-btn:hover { background: var(--green); }
         .copy-btn.copied { background: var(--green); }
 
@@ -381,18 +334,53 @@ export default function Home() {
           cursor: pointer;
           transition: border-color 0.15s, color 0.15s;
         }
-
         .try-again:hover { border-color: var(--ink); color: var(--ink); }
 
-        /* FOOTER */
-        footer {
+        /* FEEDBACK WIDGET */
+        .feedback-widget {
+          margin-top: 1.25rem;
+          padding-top: 1.25rem;
           border-top: 1px solid var(--border);
-          padding: 1.25rem 2rem;
-          text-align: center;
-          font-size: 0.78rem;
-          color: var(--muted);
+          display: flex;
+          flex-direction: column;
+          gap: 0.6rem;
         }
+        .feedback-question { font-size: 0.85rem; color: var(--muted); }
+        .feedback-thumbs { display: flex; gap: 0.5rem; }
+        .thumb-btn {
+          font-size: 1.2rem;
+          background: none;
+          border: 1.5px solid var(--border);
+          border-radius: 6px;
+          padding: 0.35rem 0.65rem;
+          cursor: pointer;
+          transition: all 0.15s;
+          line-height: 1;
+        }
+        .thumb-btn:hover { border-color: var(--amber); background: var(--amber-bg); }
+        .thumb-active-up { border-color: var(--green) !important; background: var(--green-bg) !important; }
+        .thumb-active-down { border-color: #991b1b !important; background: rgba(185,28,28,0.06) !important; }
 
+        .feedback-comment { display: flex; flex-direction: column; gap: 0.5rem; animation: fadeUp 0.2s ease both; }
+        .feedback-textarea { min-height: auto !important; height: 60px !important; font-size: 0.88rem !important; padding: 0.6rem 0.8rem !important; resize: none !important; }
+
+        .feedback-submit-btn {
+          align-self: flex-start;
+          padding: 0.45rem 1rem;
+          background: var(--ink);
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          font-family: 'Source Sans 3', sans-serif;
+          font-size: 0.83rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+        .feedback-submit-btn:hover { background: var(--amber); }
+        .feedback-thanks { font-size: 0.88rem; color: var(--green); font-weight: 500; }
+
+        footer { border-top: 1px solid var(--border); padding: 1.25rem 2rem; text-align: center; font-size: 0.78rem; color: var(--muted); }
         footer a { color: var(--amber); text-decoration: none; }
 
         @media (max-width: 480px) {
@@ -412,10 +400,8 @@ export default function Home() {
           <p className="subhead">Paste any customer email, review, or message. Pick a tone. Get a professional reply — no tech skills needed.</p>
 
           <div className="card">
-
-            {/* Optional business type */}
             <div className="card-section">
-              <div className="section-label">Your business type <span style={{fontWeight:300, textTransform:'none', letterSpacing:0}}>(optional)</span></div>
+              <div className="section-label">Your business type <span style={{fontWeight:300, textTransform:"none", letterSpacing:0}}>(optional)</span></div>
               <input
                 className="biz-input"
                 type="text"
@@ -426,7 +412,6 @@ export default function Home() {
               />
             </div>
 
-            {/* Tone selector */}
             <div className="card-section">
               <div className="section-label">Reply tone</div>
               <div className="tone-grid">
@@ -444,7 +429,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Message input */}
             <div className="card-section">
               <div className="section-label">Customer message</div>
               <div className="message-wrap">
@@ -458,7 +442,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Submit */}
             <div className="card-section">
               <button
                 className="submit-btn"
@@ -471,12 +454,10 @@ export default function Home() {
                   "✍️ Write my reply"
                 )}
               </button>
-
               {error && <div className="error-box">⚠️ {error}</div>}
             </div>
           </div>
 
-          {/* Reply output */}
           {reply && (
             <div className="reply-section">
               <div className="reply-label">Your reply is ready</div>
@@ -484,15 +465,49 @@ export default function Home() {
               <button className={`copy-btn ${copied ? "copied" : ""}`} onClick={handleCopy}>
                 {copied ? "✓ Copied!" : "Copy reply"}
               </button>
-              <button className="try-again" onClick={() => { setReply(""); setMessage(""); setCharCount(0); }}>
+              <button className="try-again" onClick={() => { setReply(""); setMessage(""); setCharCount(0); setFeedbackRating(null); setFeedbackComment(""); setFeedbackState("idle"); }}>
                 Start over
               </button>
+
+              <div className="feedback-widget">
+                {feedbackState !== "submitted" ? (
+                  <>
+                    <div className="feedback-question">Was this reply helpful?</div>
+                    <div className="feedback-thumbs">
+                      <button
+                        className={`thumb-btn ${feedbackRating === "up" ? "thumb-active-up" : ""}`}
+                        onClick={() => handleFeedback("up")}
+                      >👍</button>
+                      <button
+                        className={`thumb-btn ${feedbackRating === "down" ? "thumb-active-down" : ""}`}
+                        onClick={() => handleFeedback("down")}
+                      >👎</button>
+                    </div>
+                    {feedbackState === "open" && (
+                      <div className="feedback-comment">
+                        <textarea
+                          className="feedback-textarea"
+                          placeholder="Any comments? (optional)"
+                          value={feedbackComment}
+                          onChange={e => setFeedbackComment(e.target.value)}
+                        />
+                        <button className="feedback-submit-btn" onClick={submitFeedback}>
+                          Send feedback
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="feedback-thanks">Thanks for your feedback 🙏</div>
+                )}
+              </div>
             </div>
           )}
         </main>
 
         <footer>
-Powered by <a href="https://anthropic.com" target="_blank" rel="noopener">Claude AI</a> · Built by SimpleAI        </footer>
+          Powered by <a href="https://anthropic.com" target="_blank" rel="noopener">Claude AI</a> · Built by SimpleAI
+        </footer>
       </div>
     </>
   );
