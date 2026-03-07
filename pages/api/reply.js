@@ -69,6 +69,19 @@ Write only the reply, nothing else.`,
     });
 
     const reply = response.content[0]?.text || "";
+
+    // Fire-and-forget usage log
+    fetch(`${process.env.SUPABASE_URL}/rest/v1/usage`, {
+      method: "POST",
+      headers: {
+        apikey: process.env.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({ goal: goal || "retain" }),
+    }).catch(() => {});
+
     res.status(200).json({ reply });
   } catch (err) {
     console.error(err);
