@@ -66,6 +66,12 @@ async function getUsage(startIso) {
   return { total: rows.length };
 }
 
+async function getReferrals(startIso) {
+  const filter = startIso ? `&created_at=gte.${startIso}` : "";
+  const rows = await supabaseFetch("referrals", filter);
+  return { total: rows.length };
+}
+
 function trend(current, previous) {
   if (!previous) return "flat";
   if (current > previous) return "up";
@@ -90,6 +96,7 @@ export default async function handler(req, res) {
       emailCur, emailPrev,
       feedbackCur, feedbackPrev,
       usageCur, usagePrev,
+      referralsCur, referralsPrev,
     ] = await Promise.all([
       getSignups(start, null),
       start ? getSignups(prevStart, start) : Promise.resolve(0),
@@ -99,6 +106,8 @@ export default async function handler(req, res) {
       start ? getFeedback(prevStart.toISOString()) : Promise.resolve({ total: 0, up: 0, down: 0 }),
       getUsage(start ? start.toISOString() : null),
       start ? getUsage(prevStart.toISOString()) : Promise.resolve({ total: 0 }),
+      getReferrals(start ? start.toISOString() : null),
+      start ? getReferrals(prevStart.toISOString()) : Promise.resolve({ total: 0 }),
     ]);
 
     const metrics = [
@@ -143,13 +152,22 @@ export default async function handler(req, res) {
         stage: 4,
       },
       {
+        id: "referrals",
+        label: "Referral Clicks",
+        value: referralsCur.total,
+        prev: referralsPrev.total,
+        trend: trend(referralsCur.total, referralsPrev.total),
+        format: "number",
+        stage: 5,
+      },
+      {
         id: "replies",
         label: "Replies Generated",
         value: usageCur.total,
         prev: usagePrev.total,
         trend: trend(usageCur.total, usagePrev.total),
         format: "number",
-        stage: 5,
+        stage: 6,
       },
       {
         id: "feedback",
